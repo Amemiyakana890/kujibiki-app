@@ -976,9 +976,9 @@
     adminBackdrop.classList.add("show");
   }
 
-  function renderTierRows(config){
+  function renderTierRows(config, draftCounts){
     var wrap = document.getElementById("tierRows");
-    var counts = remainingCounts(getState(), config);
+    var counts = draftCounts || remainingCounts(getState(), config);
     wrap.innerHTML = config.prizes.map(function(p, i){
       return '<div class="tier-row" data-idx="'+i+'" data-id="'+escapeHtml(p.id)+'">' +
         '<input type="text" class="t-label" value="'+escapeHtml(p.label)+'" placeholder="A賞">' +
@@ -991,12 +991,14 @@
     wrap.querySelectorAll(".del").forEach(function(btn){
       btn.addEventListener("click", function(){
         var idx = parseInt(btn.getAttribute("data-del"), 10);
+        var draftCounts = readStockCountsFromForm();
         var config2 = readConfigFromForm(false);
         var prize = config2.prizes[idx];
         if (!prize) return;
         askConfirmation("「" + prize.label + "：" + prize.name + "」を削除しますか？ 未抽選分の在庫も一覧から削除されます。", function(){
           config2.prizes.splice(idx, 1);
-          renderTierRows(config2);
+          delete draftCounts[prize.id];
+          renderTierRows(config2, draftCounts);
         });
       });
     });
@@ -1025,11 +1027,26 @@
   }
 
   document.getElementById("addTierBtn").addEventListener("click", function(){
+    var draftCounts = readStockCountsFromForm();
     var config = readConfigFromForm(false);
-    var nextId = String.fromCharCode(65 + config.prizes.length);
+    var usedIds = {};
+    config.prizes.forEach(function(prize){ usedIds[prize.id] = true; });
+    var nextCode = 65;
+    while (usedIds[String.fromCharCode(nextCode)]) nextCode++;
+    var nextId = String.fromCharCode(nextCode);
     config.prizes.push({ id: nextId, label: nextId + "賞", name: "景品名", total: 1 });
-    renderTierRows(config);
+    draftCounts[nextId] = 1;
+    renderTierRows(config, draftCounts);
   });
+
+  function readStockCountsFromForm(){
+    var counts = {};
+    document.querySelectorAll("#tierRows .tier-row").forEach(function(row){
+      var input = row.querySelector("[data-stock]");
+      if (input) counts[row.getAttribute("data-id")] = Math.max(0, parseInt(input.value, 10) || 0);
+    });
+    return counts;
+  }
 
   function readConfigFromForm(keepId){
     var base = getConfig();
@@ -1054,11 +1071,27 @@
 
   document.getElementById("saveConfigBtn").addEventListener("click", function(){
     var config = readConfigFromForm(true);
+    var requestedCounts = readStockCountsFromForm();
     setConfig(config);
     var state = getState();
     var validIds = {};
     config.prizes.forEach(function(p){ validIds[p.id] = true; });
     state.pool = state.pool.filter(function(id){ return validIds[id]; });
+    config.prizes.forEach(function(prize){
+      var currentCount = remainingCounts(state, config)[prize.id] || 0;
+      var requestedCount = Math.max(0, Math.min(prize.total, requestedCounts[prize.id] || 0));
+      while (currentCount < requestedCount){
+        var insertAt = Math.floor(Math.random() * (state.pool.length + 1));
+        state.pool.splice(insertAt, 0, prize.id);
+        currentCount++;
+      }
+      while (currentCount > requestedCount){
+        var removeAt = state.pool.indexOf(prize.id);
+        if (removeAt === -1) break;
+        state.pool.splice(removeAt, 1);
+        currentCount--;
+      }
+    });
     setState(state);
     renderAll();
     document.getElementById("configMsg").innerHTML = '<div class="msg ok">設定を保存しました。総数を変更しても現在庫は変わりません。</div>';
