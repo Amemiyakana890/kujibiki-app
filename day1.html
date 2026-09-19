@@ -16,11 +16,11 @@
     </div>
     <div class="topbar-center">
       <span class="day-badge" id="dayBadge">1日目</span>
-      <span class="stats-line" id="totalLine"></span>
     </div>
     <div class="topbar-right">
-      <button class="icon-btn" id="muteBtn" title="音のオン/オフ">🔊</button>
       <button class="btn-outline" id="fullscreenBtn">全画面表示</button>
+      <button class="icon-btn" id="muteBtn" title="音のオン/オフ">🔊</button>
+      <button class="icon-btn gear-btn" id="gearBtn" title="運営用設定">⚙</button>
     </div>
   </div>
 
@@ -56,8 +56,6 @@
 
   <p class="page-switch-hint"><a href="index.html">← 案内ページへ</a></p>
 </div>
-
-<button class="gear-btn" id="gearBtn" title="運営用設定">⚙</button>
 
 <!-- 1位(トップ賞)演出 -->
 <div class="overlay" id="grandOverlay" aria-hidden="true">
@@ -114,6 +112,7 @@
     <div class="modal-actions">
       <button class="btn-ghost btn-small" id="resetStockBtn">在庫を満タンにリセットする</button>
     </div>
+    <div id="resetStockMsg"></div>
 
     <div class="section-div"></div>
 

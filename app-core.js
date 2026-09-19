@@ -405,7 +405,7 @@
     resetStockBtn.addEventListener("click", function(){
       askConfirmation("在庫を満タンにリセットします。よろしいですか？", function(){
         resetStock();
-        document.getElementById("configMsg").innerHTML = '<div class="msg ok">在庫をリセットしました。</div>';
+        document.getElementById("resetStockMsg").innerHTML = '<div class="msg ok">在庫をリセットしました。</div>';
       });
     });
   }
