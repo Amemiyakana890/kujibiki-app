@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>抽選くじ（2日目）</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="stage">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="brand-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h1 id="eventTitle">学園祭 抽選会</h1>
+    </div>
+    <div class="topbar-center">
+      <span class="day-badge" id="dayBadge">2日目</span>
+      <span class="stats-line" id="totalLine"></span>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="muteBtn" title="音のオン/オフ">🔊</button>
+      <button class="btn-outline" id="fullscreenBtn">全画面表示</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="card draw-card">
+      <div class="scratch-wrap" id="scratchWrap">
+        <div class="result-area" id="resultArea">
+          <div class="result-placeholder" id="resultPlaceholder">ボタンを押してガチャを回そう！</div>
+        </div>
+        <div class="gacha-overlay" id="gachaOverlay">
+          <div class="gacha-bg"></div>
+          <div class="capsule" id="gachaCapsule"><div class="capsule-top"></div><div class="capsule-bottom"></div></div>
+          <div class="cutin-flash" id="cutinFlash"></div>
+          <div class="cutin-banner" id="cutinBanner">
+            <div class="cutin-tag" id="cutinTag"></div>
+            <div class="cutin-name" id="cutinName"></div>
+          </div>
+        </div>
+        <span class="confetti-dot cd1"></span>
+        <span class="confetti-dot cd2"></span>
+        <span class="confetti-dot cd3"></span>
+        <span class="confetti-dot cd4"></span>
+        <span class="confetti-dot cd5"></span>
+        <span class="confetti-dot cd6"></span>
+      </div>
+      <p class="scratch-note" id="scratchNote">くじを引くと、ガチャが開いてカットインで結果が登場します</p>
+
+      <div class="actions">
+        <button class="btn-primary" id="drawBtn">抽選スタート</button>
+      </div>
+      <p class="draw-caption">抽選は一度につき1本です　・　結果を確認してから次の抽選へお進みください</p>
+    </section>
+
+    <section class="card">
+      <div class="stock-kicker">PRIZE LINEUP</div>
+      <div class="stock-title"><span>景品の残り</span><span class="remain" id="remainLine">残り 0 本</span></div>
+      <div class="stock-list" id="stockList"></div>
+    </section>
+  </main>
+
+  <p class="page-switch-hint"><a href="index.html">← 案内ページへ</a>　・　<a href="day1.html">1日目のページを開く →</a></p>
+</div>
+
+<button class="gear-btn" id="gearBtn" title="運営用設定">⚙</button>
+
+<!-- 1位(トップ賞)演出 -->
+<div class="overlay" id="grandOverlay" aria-hidden="true">
+  <div class="burst"><div class="ring"></div><div class="ring2"></div><div class="rays"></div></div>
+</div>
+<div class="confetti" id="confetti" aria-hidden="true"></div>
+
+<!-- パスワードモーダル -->
+<div class="modal-backdrop" id="pwBackdrop">
+  <div class="modal" style="max-width:380px;">
+    <button class="close-x" id="pwClose">×</button>
+    <h2>運営用ログイン</h2>
+    <p class="desc">賞品の設定変更などを行うにはパスワードが必要です。</p>
+    <label>パスワード</label>
+    <input type="password" id="pwInput">
+    <div class="modal-actions">
+      <button class="btn-primary" id="pwSubmit">ログイン</button>
+    </div>
+    <div id="pwMsg"></div>
+  </div>
+</div>
+
+<!-- 管理画面モーダル -->
+<div class="modal-backdrop" id="adminBackdrop">
+  <div class="modal">
+    <button class="close-x" id="adminClose">×</button>
+    <h2>運営用設定（2日目）</h2>
+    <p class="desc">賞品の内容や当選数を編集できます。編集後は保存してください。</p>
+
+    <label>イベントタイトル</label>
+    <input type="text" id="cfgTitle">
+
+    <label style="margin-top:18px;">賞品ラインナップ</label>
+    <div class="tier-head" aria-hidden="true"><span>賞</span><span>景品名</span><span>総数</span><span>現在庫</span><span></span></div>
+    <div id="tierRows"></div>
+    <button class="btn-ghost btn-small" id="addTierBtn" style="margin-top:8px;">＋ 賞を追加</button>
+    <p class="stock-warning">注意：総数を変更して保存しても現在庫は変わりません。現在庫は0から総数まで入力でき、変更はすぐに反映されます。賞を削除すると、未抽選分も一覧から削除されます。</p>
+
+    <div class="modal-actions">
+      <button class="btn-primary" id="saveConfigBtn">設定を保存</button>
+    </div>
+    <div id="configMsg"></div>
+
+    <div class="section-div"></div>
+
+    <label>在庫リセット</label>
+    <p class="hint">現在このページは <strong id="adminDayLabel">2日目</strong>（ガチャ演出）です。ボタンを押すと在庫が満タンに戻ります。day1.html と在庫を共有しているので、通常は1日目終了時に day1.html 側でリセットしておけばOKです。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost btn-small" id="resetStockBtn">在庫を満タンにリセットする</button>
+    </div>
+
+    <div class="section-div"></div>
+
+    <label>運営パスワードの変更</label>
+    <input type="password" id="newPassword" placeholder="新しいパスワード" autocomplete="new-password">
+    <p class="password-warning">注意：パスワードを変更すると、次回から新しいパスワードが必要です。変更内容を確認してから実行してください。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost btn-small" id="changePwBtn">パスワードを変更</button>
+    </div>
+    <div id="passwordMsg"></div>
+
+    <div class="section-div"></div>
+    <button class="btn-ghost btn-small" id="wipeBtn" style="border-color:var(--red-deep); color:var(--red-deep);">全データを初期化する</button>
+  </div>
+</div>
+
+<!-- 確認モーダル -->
+<div class="modal-backdrop confirm-backdrop" id="confirmBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <h2>操作の確認</h2>
+    <p class="desc" id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-primary" id="confirmOkBtn">実行する</button>
+      <button class="btn-ghost" id="confirmCancelBtn">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>window.KUJI_DAY = 2;</script>
+<script src="app-core.js"></script>
+<script src="reveal-gacha.js"></script>
+</body>
+</html>
