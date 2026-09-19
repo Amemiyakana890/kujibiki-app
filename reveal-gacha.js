@@ -62,7 +62,7 @@
       setTimeout(function(){
         if (isDead()) return;
         cutinTag.textContent = prize.label;
-        cutinTag.style.color = Kuji.tierHex(prize.id);
+        cutinTag.style.color = prize.id === "B" ? "#9FC5FF" : Kuji.tierHex(prize.id);
         cutinName.textContent = prize.name || "";
         banner.style.opacity = "1";
         banner.classList.add("slide-in");
