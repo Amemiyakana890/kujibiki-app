@@ -581,14 +581,36 @@
     if (e.target === confirmBackdrop) closeConfirmation();
   });
 
+  // パスワード入力画面は、お客さんが歯車を押してそのまま離れても、次の人が抽選できなくならないよう、
+  // 操作がないまま一定時間たったら自動で閉じる（入力中は、入力するたびに時間を数え直す）。
+  // ログイン後の運営画面は、編集中の内容が消えてしまうので、自動では閉じない。
+  var PASSWORD_PROMPT_TIMEOUT_MS = 30000;
+  var pwTimer = null;
+
+  function closePasswordPrompt(){
+    clearTimeout(pwTimer);
+    pwTimer = null;
+    pwBackdrop.classList.remove("show");
+    document.getElementById("pwInput").value = "";
+  }
+  function restartPasswordTimer(){
+    clearTimeout(pwTimer);
+    pwTimer = setTimeout(closePasswordPrompt, PASSWORD_PROMPT_TIMEOUT_MS);
+  }
+
   document.getElementById("gearBtn").addEventListener("click", function(){
     document.getElementById("pwInput").value = "";
     document.getElementById("pwMsg").innerHTML = "";
     pwBackdrop.classList.add("show");
     document.getElementById("pwInput").focus();
+    restartPasswordTimer();
   });
-  document.getElementById("pwClose").addEventListener("click", function(){ pwBackdrop.classList.remove("show"); });
-  pwBackdrop.addEventListener("click", function(e){ if (e.target === pwBackdrop) pwBackdrop.classList.remove("show"); });
+  document.getElementById("pwClose").addEventListener("click", closePasswordPrompt);
+  pwBackdrop.addEventListener("click", function(e){ if (e.target === pwBackdrop) closePasswordPrompt(); });
+  document.getElementById("pwInput").addEventListener("input", restartPasswordTimer);
+  document.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && pwBackdrop.classList.contains("show")) closePasswordPrompt();
+  });
 
   document.getElementById("pwSubmit").addEventListener("click", tryLogin);
   document.getElementById("pwInput").addEventListener("keydown", function(e){ if (e.key === "Enter") tryLogin(); });
@@ -597,10 +619,11 @@
     var config = getConfig();
     var val = document.getElementById("pwInput").value;
     if (val === config.adminPassword){
-      pwBackdrop.classList.remove("show");
+      closePasswordPrompt();
       openAdmin();
     } else {
       document.getElementById("pwMsg").innerHTML = '<div class="msg err">パスワードが違います。</div>';
+      restartPasswordTimer();
     }
   }
 

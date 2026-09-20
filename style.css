@@ -55,7 +55,20 @@
   }
   html:fullscreen .topbar{ width:100%; }
   html:fullscreen main{ flex:1; align-content:center; }
-  html:fullscreen .page-switch-hint{ margin-top:auto; padding-top:1.75rem; }
+  /* ===== 本番モード（全画面）：お客さんに見せる画面と、スタッフ用の操作を分ける =====
+     ・「← 案内ページへ」は、お客さんが押すと案内ページ（集計ページの入口）に出てしまうので、全画面の間は隠す
+       （スタッフは「全画面を終了」で全画面を解除すれば、リンクが現れる）
+     ・上部の「全画面を終了」「音」「歯車」は、小さく薄くして目立たなくする。マウスを乗せる／キーボードで選ぶと普通の濃さに戻る
+       （:focus-within は使わない。マウスで「全画面表示」を押したあともフォーカスが残り、ずっと濃いままになってしまうため）
+     ※ 「全画面表示」ボタンで入った全画面は :fullscreen、ブラウザの F11 は display-mode: fullscreen で判定する */
+  html:fullscreen .stage .page-switch-hint{ display:none; }
+  html:fullscreen .topbar-right{ opacity:.3; filter:grayscale(1); transform:scale(.85); transform-origin:right center; transition:opacity .25s, filter .25s, transform .25s; }
+  html:fullscreen .topbar-right:hover, html:fullscreen .topbar-right:has(:focus-visible){ opacity:1; filter:none; transform:none; }
+  @media (display-mode: fullscreen){
+    .stage .page-switch-hint{ display:none; }
+    .topbar-right{ opacity:.3; filter:grayscale(1); transform:scale(.85); transform-origin:right center; transition:opacity .25s, filter .25s, transform .25s; }
+    .topbar-right:hover, .topbar-right:has(:focus-visible){ opacity:1; filter:none; transform:none; }
+  }
 
   /* ===== 上部バー ===== */
   .topbar{
