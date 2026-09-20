@@ -12,6 +12,9 @@
   var CONFIG_KEY = "kujiConfig_v1";
   var STATE_KEY  = "kujiState_v1";
   var MUTE_KEY   = "kujiMuted_v1";
+  // 抽選履歴（集計ページ用）。在庫リセット・全データ初期化の影響を受けないよう、
+  // 在庫（STATE_KEY）とは別のキーに保存する。集計・CSV出力・リセットは statistics.js が担当。
+  var STATS_KEY  = "kujiStats_v1";
 
   var TIER_COLORS = { A:"tier-A", B:"tier-B", C:"tier-C", D:"tier-D" };
   var TIER_HEX = { A:"#DA9A2E", B:"#33447A", C:"#12896F", D:"#D14A78" };
@@ -87,6 +90,20 @@
   function prizeById(config, id){
     for (var i=0;i<config.prizes.length;i++){ if (config.prizes[i].id === id) return config.prizes[i]; }
     return null;
+  }
+
+  // 抽選1回ぶんの履歴を追記する。日付・時刻・時間帯は ts から集計側で算出する。
+  // 記録に失敗しても抽選そのものは止めない。
+  function recordDraw(prize, ts){
+    try{
+      var list = [];
+      try{
+        var parsed = JSON.parse(localStorage.getItem(STATS_KEY) || "[]");
+        if (Array.isArray(parsed)) list = parsed;
+      }catch(e){ list = []; }
+      list.push({ ts: ts, day: CURRENT_DAY, id: prize.id, label: prize.label });
+      localStorage.setItem(STATS_KEY, JSON.stringify(list));
+    }catch(e){ /* 保存できなくても抽選は続行 */ }
   }
 
   /* ===================== サウンド ===================== */
@@ -238,9 +255,11 @@
     var winId = state.pool[idx];
     var prize = prizeById(config, winId) || { id:winId, label:winId, name:"" };
 
+    var drawnAt = Date.now();
     state.pool.splice(idx, 1);
-    state.drawnLog.push({ id: winId, ts: Date.now() });
+    state.drawnLog.push({ id: winId, ts: drawnAt });
     setState(state);
+    recordDraw(prize, drawnAt);
 
     pendingPrize = prize;
     renderResultContent(prize);
@@ -400,11 +419,25 @@
     adminBackdrop.classList.add("show");
   }
 
+  // 運営画面の「現在庫」欄を、実際の在庫（localStorage）の数に合わせ直す。
+  // 欄は運営画面を開いた時点の数字のままなので、在庫リセット後に更新しないと、
+  // 続けて「設定を保存」を押したときに古い数字が在庫へ書き戻されてしまう。
+  // 追加しただけで未保存の賞の行は、実際の在庫がまだ無いので触らない。
+  function syncStockInputsFromState(){
+    var config = getConfig();
+    var counts = remainingCounts(getState(), config);
+    document.querySelectorAll("#tierRows [data-stock]").forEach(function(input){
+      var id = input.getAttribute("data-stock");
+      if (prizeById(config, id)) input.value = counts[id] || 0;
+    });
+  }
+
   var resetStockBtn = document.getElementById("resetStockBtn");
   if (resetStockBtn){
     resetStockBtn.addEventListener("click", function(){
       askConfirmation("在庫を満タンにリセットします。よろしいですか？", function(){
         resetStock();
+        syncStockInputsFromState();
         document.getElementById("resetStockMsg").innerHTML = '<div class="msg ok">在庫をリセットしました。</div>';
       });
     });

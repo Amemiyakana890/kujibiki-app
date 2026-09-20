@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抽選データ集計</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="stats-page">
+
+<div class="stage">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="brand-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h1 class="page-title">抽選データ集計</h1>
+    </div>
+    <div class="topbar-right">
+      <a class="link-btn btn-outline" id="backLink" href="index.html">← 案内ページへ</a>
+    </div>
+  </div>
+
+  <div class="day-tabs" role="group" aria-label="表示する日">
+    <button type="button" class="day-tab" data-day="1" aria-pressed="true">1日目</button>
+    <button type="button" class="day-tab" data-day="2" aria-pressed="false">2日目</button>
+  </div>
+
+  <section class="card stats-summary" id="summary" aria-live="polite"></section>
+
+  <main>
+    <section class="card">
+      <h2 class="section-title">時間帯別の抽選回数</h2>
+      <table class="slot-table">
+        <thead>
+          <tr><th scope="col">時間帯</th><th scope="col" class="visually-hidden">割合</th><th scope="col" class="slot-count">抽選回数</th></tr>
+        </thead>
+        <tbody id="slotBody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">賞別の当選数</h2>
+      <div class="stock-list" id="prizeList"></div>
+    </section>
+  </main>
+
+  <section class="card stats-manage">
+    <div class="manage-row">
+      <div class="manage-text">
+        <h2 class="manage-title">CSVで書き出す</h2>
+        <p class="hint" id="csvHint"></p>
+      </div>
+      <button type="button" class="btn-solid" id="csvBtn">CSVを書き出す</button>
+    </div>
+    <div id="csvMsg" aria-live="polite"></div>
+    <div class="section-div"></div>
+    <div class="manage-row">
+      <div class="manage-text">
+        <h2 class="manage-title">統計データのリセット</h2>
+        <p class="hint">本番前のテスト抽選などの記録を削除します。1日目・2日目の記録がすべて消え、元に戻せません。在庫や賞品の設定は変わりません。</p>
+      </div>
+      <button type="button" class="btn-ghost btn-small btn-danger" id="resetBtn">統計データをリセット</button>
+    </div>
+    <div id="resetMsg" aria-live="polite"></div>
+  </section>
+</div>
+
+<!-- 確認モーダル -->
+<div class="modal-backdrop confirm-backdrop" id="confirmBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <h2>操作の確認</h2>
+    <p class="desc" id="confirmMessage"></p>
+    <div class="modal-actions">
+      <button class="btn-primary" id="confirmOkBtn">実行する</button>
+      <button class="btn-ghost" id="confirmCancelBtn">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script src="statistics.js"></script>
+</body>
+</html>
