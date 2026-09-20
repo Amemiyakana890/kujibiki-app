@@ -40,7 +40,14 @@
     runAutoScratch(rect);
   }
 
+  // 画面が大きいとき、app-core.js が <html> の文字サイズを大きくして画面全体を拡大する。
+  // canvas の中は px で描いているので、寸法（ブラシの半径・文字・削る経路の間隔など）も同じ倍率にそろえる。
+  // そろえないと、カードだけ大きくなって経路の点が増え、削る演出が長くなってしまう。
+  var U = 1;
+  function uiScale(){ return (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16; }
+
   function setupScratchCanvas(){
+    U = uiScale();
     var canvas = scratchCanvas;
     canvas.classList.remove("fading");
     canvas.style.display = "block";
@@ -62,16 +69,16 @@
     grad.addColorStop(.55, "#c7ccd6");
     grad.addColorStop(1, "#eef0f5");
     c.fillStyle = grad;
-    roundRectPath(c, 0, 0, w, h, 20);
+    roundRectPath(c, 0, 0, w, h, 20 * U);
     c.fill();
 
     c.save();
-    roundRectPath(c, 0, 0, w, h, 20);
+    roundRectPath(c, 0, 0, w, h, 20 * U);
     c.clip();
     c.globalAlpha = 0.12;
     c.strokeStyle = "#5a6072";
-    c.lineWidth = 6;
-    for (var x = -h; x < w + h; x += 14){
+    c.lineWidth = 6 * U;
+    for (var x = -h; x < w + h; x += 14 * U){
       c.beginPath();
       c.moveTo(x, 0);
       c.lineTo(x + h, h);
@@ -81,21 +88,21 @@
     c.globalAlpha = 1;
 
     c.fillStyle = "rgba(55,55,70,.6)";
-    c.font = "700 16px sans-serif";
+    c.font = "700 " + (16 * U) + "px sans-serif";
     c.textAlign = "center";
     c.textBaseline = "middle";
-    c.fillText("抽選中…", w / 2, h / 2 + 40);
+    c.fillText("抽選中…", w / 2, h / 2 + 40 * U);
 
     c.globalCompositeOperation = "destination-out";
     return { w: w, h: h };
   }
 
   function buildScratchPath(w, h){
-    var pad = 16;
-    var rowGap = 30;
+    var pad = 16 * U;
+    var rowGap = 30 * U;
     var rows = Math.max(4, Math.round((h - pad * 2) / rowGap));
     var rowH = (h - pad * 2) / (rows - 1 || 1);
-    var colStep = 11;
+    var colStep = 11 * U;
     var path = [];
     for (var r = 0; r < rows; r++){
       var y = pad + r * rowH;
@@ -104,7 +111,7 @@
       for (var s = 0; s <= steps; s++){
         var t = s / steps;
         var x = leftToRight ? (pad + t * (w - pad * 2)) : (w - pad - t * (w - pad * 2));
-        var jitter = Math.sin(r * 2.7 + s * 0.55) * 4;
+        var jitter = Math.sin(r * 2.7 + s * 0.55) * 4 * U;
         path.push({ x: x, y: y + jitter });
       }
     }
@@ -114,7 +121,7 @@
   function positionHint(pt){
     scratchHint.style.left = pt.x + "px";
     scratchHint.style.top = pt.y + "px";
-    scratchHint.classList.toggle("flip", Math.round(pt.x) % 22 < 11);
+    scratchHint.classList.toggle("flip", Math.round(pt.x / U) % 22 < 11);
   }
 
   function buildTeaseSpots(w, h){
@@ -147,7 +154,7 @@
       if (teaseIdx < teaseSpots.length){
         var pt = teaseSpots[teaseIdx++];
         scratchCtx.beginPath();
-        scratchCtx.arc(pt.x, pt.y, 19, 0, Math.PI * 2);
+        scratchCtx.arc(pt.x, pt.y, 19 * U, 0, Math.PI * 2);
         scratchCtx.fill();
         positionHint(pt);
         playScratchTick();
@@ -165,7 +172,7 @@
       for (var b = 0; b < pointsPerFrame && idx < mainStop; b++, idx++){
         var pt = path[idx];
         scratchCtx.beginPath();
-        scratchCtx.arc(pt.x, pt.y, 26, 0, Math.PI * 2);
+        scratchCtx.arc(pt.x, pt.y, 26 * U, 0, Math.PI * 2);
         scratchCtx.fill();
         positionHint(pt);
       }
@@ -204,7 +211,7 @@
     for (var i = idx; i < path.length; i++){
       var pt = path[i];
       scratchCtx.beginPath();
-      scratchCtx.arc(pt.x, pt.y, 30, 0, Math.PI * 2);
+      scratchCtx.arc(pt.x, pt.y, 30 * U, 0, Math.PI * 2);
       scratchCtx.fill();
     }
     finishAutoScratch(rect);

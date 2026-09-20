@@ -1001,7 +1001,46 @@
   };
   var Kuji = window.Kuji;
 
+  /* ===================== 大画面での拡大表示 ===================== */
+  // CSS は rem で書いてあるので、<html> の文字サイズを大きくするだけで、文字・余白・カードが比例して大きくなる。
+  // 画面の幅と高さに「収まる最大の倍率」を探して適用する（小さい画面では何もしない）。
+  var BASE_FONT_PX = 16;                 // style.css の html{font-size} と同じ
+  var STAGE_DESIGN_W = 1080 + 24 * 2;    // .stage の最大幅 + 左右の余白。これより画面が広いときだけ拡大できる
+  var MAX_STAGE_SCALE = 3;
+
+  function stageFits(){
+    var stage = document.querySelector(".stage");
+    if (document.documentElement.scrollHeight > window.innerHeight + 1) return false; // ページが縦にはみ出す
+    if (stage && stage.scrollHeight > stage.clientHeight + 1) return false;            // 全画面: 固定の高さの枠から内容があふれる
+    return true;
+  }
+  function setStageScale(scale){
+    document.documentElement.style.fontSize = scale > 1 ? (BASE_FONT_PX * scale) + "px" : "";
+  }
+  function applyStageScale(){
+    var hi = Math.min(MAX_STAGE_SCALE, window.innerWidth / STAGE_DESIGN_W);
+    if (hi <= 1){ setStageScale(1); return; }
+    setStageScale(hi);
+    if (stageFits()) return;
+    var lo = 1;                          // 等倍は常に許容（等倍で収まらない小さい画面は、従来どおりスクロールする）
+    for (var i = 0; i < 9; i++){         // 収まる最大の倍率を二分探索
+      var mid = (lo + hi) / 2;
+      setStageScale(mid);
+      if (stageFits()) lo = mid; else hi = mid;
+    }
+    setStageScale(lo);
+  }
+  var stageScaleTimer = null;
+  function scheduleStageScale(){
+    clearTimeout(stageScaleTimer);
+    stageScaleTimer = setTimeout(applyStageScale, 80);
+  }
+  window.addEventListener("resize", scheduleStageScale);
+  document.addEventListener("fullscreenchange", scheduleStageScale);
+  window.addEventListener("load", scheduleStageScale);
+
   /* ===================== 初期化 ===================== */
   renderAll();
   restoreInterruptedDraw();
+  applyStageScale();
 })();
