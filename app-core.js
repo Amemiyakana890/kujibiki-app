@@ -210,6 +210,10 @@
 
   var CURRENT_DAY = window.KUJI_DAY || 1;
 
+  // 待機画面の表示（日ごとに文言が違う：「カードを引こう」「ガチャを回そう」）。HTML に書かれている内容を、最初に控えておく
+  var idleHtml = els.resultArea ? els.resultArea.innerHTML : "";
+  var SOLD_OUT_HTML = '<div class="sold-out">本日分は抽選済みです。<br>設定画面から在庫をリセットしてください。</div>';
+
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -312,7 +316,7 @@
     els.drawBtn.disabled = state.pool.length === 0 || revealActive;
     if (state.pool.length === 0 && !revealActive){
       if (els.scratchWrap) els.scratchWrap.classList.remove("has-card");
-      els.resultArea.innerHTML = '<div class="sold-out">本日分は抽選済みです。<br>設定画面から在庫をリセットしてください。</div>';
+      els.resultArea.innerHTML = SOLD_OUT_HTML;
       if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
     }
   }
@@ -331,6 +335,7 @@
 
     isDrawing = true;
     els.drawBtn.disabled = true;
+    cancelReturnToIdle(); // 前の結果を待機画面に戻す予約が残っていると、この演出の途中で画面が戻ってしまう
 
     var idx = Math.floor(Math.random() * state.pool.length);
     var winId = state.pool[idx];
@@ -384,6 +389,61 @@
     }
   }
 
+  /* ===================== 結果表示のあと、自動で待機画面に戻す ===================== */
+  // 結果を見せる時間（ミリ秒）。本番前のリハーサルで長さを調整するときは、ここの数字を変える。0 にすると自動では戻らない。
+  var RESULT_HOLD_MS = 3000;         // 通常の賞：結果が出てから、待機画面に戻り始めるまで
+  var GRAND_RESULT_HOLD_MS = 4000;   // A賞：特別演出が終わってから、待機画面に戻り始めるまで（少し長めに見せる）
+  var GRAND_EFFECT_MS = 2200;        // A賞の特別演出の長さ（style.css の .overlay.show の animation と同じ値）
+  var RETURN_FADE_OUT_MS = 700;      // 結果を、ふわっと消していく時間（パッと切り替わって見えないよう、ゆっくりめ）
+  var RETURN_FADE_IN_MS = 500;       // 待機画面を、ふわっと表示する時間
+
+  var returnTimer = null;
+  var returnFade = null;
+
+  // 予約していた「待機画面へ戻る」を取り消す。次の抽選・在庫リセット・取り消しなどの前に必ず呼ぶ
+  // （呼ばないと、次の演出の途中で画面が待機に戻ってしまう）。
+  function cancelReturnToIdle(){
+    clearTimeout(returnTimer);
+    returnTimer = null;
+    if (returnFade){
+      var anim = returnFade;
+      returnFade = null;
+      anim.onfinish = null;
+      try{ anim.cancel(); }catch(e){}
+    }
+  }
+
+  function showIdleScreen(){
+    if (els.scratchWrap) els.scratchWrap.classList.remove("has-card");
+    els.resultArea.innerHTML = getState().pool.length === 0 ? SOLD_OUT_HTML : idleHtml;
+    if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
+  }
+
+  function returnToIdle(){
+    returnTimer = null;
+    if (revealActive || isDrawing) return;
+    var wrap = els.scratchWrap || els.resultArea;
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!wrap.animate || reduceMotion){ showIdleScreen(); return; }
+    // ふわっと消してから待機画面に切り替え、ふわっと出す
+    var anim = wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: RETURN_FADE_OUT_MS, easing: "ease-in-out", fill: "forwards" });
+    returnFade = anim;
+    anim.onfinish = function(){
+      returnFade = null;
+      showIdleScreen();
+      anim.cancel();
+      wrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: RETURN_FADE_IN_MS, easing: "ease-out" });
+    };
+  }
+
+  function scheduleReturnToIdle(prize){
+    cancelReturnToIdle();
+    var isGrand = !!prize && prize.id === "A";
+    var hold = isGrand ? GRAND_RESULT_HOLD_MS : RESULT_HOLD_MS;
+    if (!(hold > 0)) return;
+    returnTimer = setTimeout(returnToIdle, (isGrand ? GRAND_EFFECT_MS : 0) + hold);
+  }
+
   // 演出スクリプト（reveal-scratch.js / reveal-gacha.js）が、演出の最後に必ず呼び出す関数。
   function finishReveal(prize){
     if (!revealActive) return;
@@ -398,9 +458,11 @@
     renderHeader(config, state);
     renderStock(config, state);
     els.drawBtn.disabled = state.pool.length === 0;
+    scheduleReturnToIdle(prize || pendingPrize);
   }
 
   function resetStock(){
+    cancelReturnToIdle();
     var config = getConfig();
     var state = getState();
     state.pool = buildPool(config);
@@ -418,6 +480,7 @@
   // 直前の1回を取り消す。景品を在庫へ戻し、集計の記録も1件削除する。
   // 戻り値: { ok, restored, draw } / 失敗時 { ok:false, reason }
   function cancelLastDraw(){
+    cancelReturnToIdle();
     var config = getConfig();
     var state = getState();
     var last = state.lastDraw;
@@ -911,6 +974,7 @@
   }
 
   function afterBackupImported(){
+    cancelReturnToIdle();
     // 演出の最中なら止める
     revealActive = false;
     if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
