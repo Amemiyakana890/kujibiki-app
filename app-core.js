@@ -226,6 +226,34 @@
     }
   }
 
+  // 残り本数の一覧。毎回作り直さず、賞ごとに更新する。
+  //  ・残る賞   : 数字とバーをその場で更新する（バーが滑らかに縮む）
+  //  ・なくなる賞: ふわっと消してから取り除く（fadeOutStockItem）
+  //  ・戻ってきた賞（在庫リセットなど）: 設定順の正しい位置に作る
+  function stockItemHtml(p, count){
+    var cls = TIER_COLORS[p.id] || "tier-default";
+    var pct = p.total > 0 ? Math.round((count / p.total) * 100) : 0;
+    return '<div class="stock-item" data-tier="'+escapeHtml(p.id)+'">' +
+           '<div class="stock-top">' +
+           '<span class="chip '+cls+'">'+escapeHtml(p.label)+'</span>' +
+           '<div class="info"><div class="name">'+escapeHtml(p.name)+'</div></div>' +
+           '<div class="count">'+count+'</div>' +
+           '</div>' +
+           '<div class="stock-bar"><div class="stock-bar-fill" style="width:'+pct+'%;background:'+tierHex(p.id)+';"></div></div>' +
+           '</div>';
+  }
+
+  var STOCK_FADE_MS = 560; // style.css の .stock-item の transition（.5s）より少し長く
+
+  function fadeOutStockItem(el){
+    // max-height は「今の高さ」から0へ動かさないとアニメーションしない。まず今の高さを固定する
+    el.style.maxHeight = el.offsetHeight + "px";
+    void el.offsetHeight; // 固定した高さを先に反映させる（reflow）
+    el.classList.add("leaving");
+    el.style.maxHeight = "0px";
+    setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, STOCK_FADE_MS);
+  }
+
   function renderStock(config, state){
     var counts = remainingCounts(state, config);
     var remaining = state.pool.length;
@@ -233,22 +261,48 @@
     var list = els.stockList;
     if (!list) return;
     var visible = config.prizes.filter(function(p){ return counts[p.id] > 0; });
+
+    // いま表示中（消え始めていない）の行
+    var live = {};
+    Array.prototype.forEach.call(list.querySelectorAll(".stock-item:not(.leaving)"), function(el){
+      live[el.getAttribute("data-tier")] = el;
+    });
+    var stays = {};
+    visible.forEach(function(p){ stays[p.id] = true; });
+    Object.keys(live).forEach(function(id){
+      if (!stays[id]){ fadeOutStockItem(live[id]); delete live[id]; }
+    });
+
+    var emptyEl = list.querySelector(".empty-stock");
     if (visible.length === 0){
-      list.innerHTML = '<div class="empty-stock">すべての景品が引かれました！</div>';
+      if (!emptyEl) list.insertAdjacentHTML("beforeend", '<div class="empty-stock">すべての景品が引かれました！</div>');
       return;
     }
-    list.innerHTML = visible.map(function(p){
-      var cls = TIER_COLORS[p.id] || "tier-default";
-      var pct = p.total > 0 ? Math.round((counts[p.id] / p.total) * 100) : 0;
-      return '<div class="stock-item" data-tier="'+p.id+'">' +
-             '<div class="stock-top">' +
-             '<span class="chip '+cls+'">'+escapeHtml(p.label)+'</span>' +
-             '<div class="info"><div class="name">'+escapeHtml(p.name)+'</div></div>' +
-             '<div class="count">'+counts[p.id]+'</div>' +
-             '</div>' +
-             '<div class="stock-bar"><div class="stock-bar-fill" style="width:'+pct+'%;background:'+tierHex(p.id)+';"></div></div>' +
-             '</div>';
-    }).join("");
+    if (emptyEl) emptyEl.parentNode.removeChild(emptyEl);
+
+    visible.forEach(function(p, idx){
+      var count = counts[p.id];
+      var el = live[p.id];
+      if (el){
+        // 既存の行は、名前・数・バーだけ更新する
+        var pct = p.total > 0 ? Math.round((count / p.total) * 100) : 0;
+        el.querySelector(".chip").textContent = p.label;
+        el.querySelector(".name").textContent = p.name;
+        el.querySelector(".count").textContent = count;
+        el.querySelector(".stock-bar-fill").style.width = pct + "%";
+        return;
+      }
+      var tmp = document.createElement("div");
+      tmp.innerHTML = stockItemHtml(p, count);
+      el = tmp.firstChild;
+      // 設定順で、自分より後ろにある賞の行の手前に入れる（なければ末尾）
+      var before = null;
+      for (var k = idx + 1; k < visible.length; k++){
+        if (live[visible[k].id]){ before = live[visible[k].id]; break; }
+      }
+      list.insertBefore(el, before);
+      live[p.id] = el;
+    });
   }
 
   function renderAll(){
@@ -500,6 +554,8 @@
     document.getElementById("passwordMsg").innerHTML = "";
     var cancelMsgEl = document.getElementById("cancelLastMsg");
     if (cancelMsgEl) cancelMsgEl.innerHTML = "";
+    var backupMsgEl = document.getElementById("backupMsg");
+    if (backupMsgEl) backupMsgEl.innerHTML = "";
     renderLastDrawInfo();
     adminBackdrop.classList.add("show");
   }
@@ -745,6 +801,179 @@
       renderAll();
     });
   });
+
+  /* ===================== バックアップ（書き出し・読み込み） ===================== */
+  // 設定・在庫・抽選履歴を1つのJSONファイルに書き出し、あとで読み込んで元に戻す。
+  // 運営パスワードはファイルに残さない（読み込み後も現在のパスワードのまま）。
+  var BACKUP_APP = "gakusai-kuji";
+  var BACKUP_VERSION = 1;
+  var BACKUP_MAX_BYTES = 5 * 1024 * 1024;
+
+  function buildBackup(){
+    var config = getConfig();
+    return {
+      app: BACKUP_APP,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      day: CURRENT_DAY,
+      config: { eventTitle: config.eventTitle, prizes: config.prizes },
+      state: getState(),
+      stats: readStatsList()
+    };
+  }
+
+  function isNonEmptyString(v){ return typeof v === "string" && v.length > 0; }
+  function isCount(v){ return typeof v === "number" && isFinite(v) && v >= 0 && Math.floor(v) === v; }
+  function isFiniteNumber(v){ return typeof v === "number" && isFinite(v); }
+
+  // ファイルの中身を検査して、書き込める形に整える。おかしければ Error を投げる（何も書き込まない）。
+  function parseBackup(text){
+    var data;
+    try{ data = JSON.parse(String(text).replace(/^\uFEFF/, "")); }
+    catch(e){ throw new Error("ファイルを読み込めません（バックアップファイルではないようです）。"); }
+    if (!data || typeof data !== "object" || data.app !== BACKUP_APP) throw new Error("このアプリのバックアップファイルではありません。");
+    if (data.version !== BACKUP_VERSION) throw new Error("バックアップの形式（バージョン）が違うため、読み込めません。");
+    var c = data.config, st = data.state;
+    if (!c || !Array.isArray(c.prizes) || !st || !Array.isArray(st.pool)) throw new Error("バックアップの内容が壊れています。");
+    if (c.prizes.length === 0) throw new Error("賞品が1つも入っていないバックアップです。");
+
+    var ids = Object.create(null);
+    var prizes = c.prizes.map(function(p){
+      if (!p || !isNonEmptyString(p.id) || ids[p.id] || !isCount(p.total)) throw new Error("賞品の設定が壊れています。");
+      ids[p.id] = true;
+      return { id: p.id, label: isNonEmptyString(p.label) ? p.label : p.id, name: typeof p.name === "string" ? p.name : "", total: p.total };
+    });
+    var pool = st.pool.map(function(id){
+      if (!isNonEmptyString(id) || !ids[id]) throw new Error("在庫のデータが壊れています（設定にない賞が含まれています）。");
+      return id;
+    });
+    var drawnLog = (Array.isArray(st.drawnLog) ? st.drawnLog : []).filter(function(e){
+      return e && isNonEmptyString(e.id) && isFiniteNumber(e.ts);
+    });
+    var last = st.lastDraw;
+    var lastDraw = null;
+    if (last && isNonEmptyString(last.id) && isFiniteNumber(last.ts) && isFiniteNumber(last.day)){
+      // 読み込み直後に「演出の途中で終了」と誤って表示しないよう、表示済みとして扱う
+      lastDraw = { ts: last.ts, day: last.day, id: last.id,
+                   label: isNonEmptyString(last.label) ? last.label : last.id,
+                   name: typeof last.name === "string" ? last.name : "", revealed: true };
+    }
+    var rawStats = Array.isArray(data.stats) ? data.stats : [];
+    var stats = rawStats.filter(function(r){
+      return r && isFiniteNumber(r.ts) && isFiniteNumber(r.day) && isNonEmptyString(r.id);
+    }).map(function(r){
+      return { ts: r.ts, day: r.day, id: r.id, label: typeof r.label === "string" ? r.label : r.id };
+    });
+
+    return {
+      config: { eventTitle: isNonEmptyString(c.eventTitle) ? c.eventTitle : "抽選くじ", prizes: prizes },
+      state: { pool: pool, drawnLog: drawnLog, lastDraw: lastDraw },
+      stats: stats,
+      dropped: rawStats.length - stats.length,
+      exportedAt: data.exportedAt,
+      day: data.day
+    };
+  }
+
+  // 3つのデータをまとめて書き込む。途中で失敗したら、書き込む前の状態に戻す。
+  function applyBackup(b){
+    var password = getConfig().adminPassword;
+    var keys = [CONFIG_KEY, STATE_KEY, STATS_KEY];
+    var prev = keys.map(function(k){ return localStorage.getItem(k); });
+    try{
+      localStorage.setItem(CONFIG_KEY, JSON.stringify({ eventTitle: b.config.eventTitle, adminPassword: password, prizes: b.config.prizes }));
+      localStorage.setItem(STATE_KEY, JSON.stringify(b.state));
+      localStorage.setItem(STATS_KEY, JSON.stringify(b.stats));
+      return true;
+    }catch(e){
+      keys.forEach(function(k, i){
+        try{ if (prev[i] === null) localStorage.removeItem(k); else localStorage.setItem(k, prev[i]); }catch(e2){}
+      });
+      return false;
+    }
+  }
+
+  function showBackupMsg(kind, text){
+    document.getElementById("backupMsg").innerHTML = '<div class="msg ' + kind + '">' + escapeHtml(text) + '</div>';
+  }
+
+  function exportBackup(){
+    var now = new Date();
+    var name = "kuji-backup_" + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) +
+               "-" + pad2(now.getHours()) + pad2(now.getMinutes()) + ".json";
+    var blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: "application/json" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showBackupMsg("ok", name + " を書き出しました。USBメモリなど、このPCとは別の場所にも保管しておくと安心です。");
+  }
+
+  function afterBackupImported(){
+    // 演出の最中なら止める
+    revealActive = false;
+    if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
+    if (els.scratchWrap) els.scratchWrap.classList.remove("has-card");
+    var config = getConfig();
+    renderAll();
+    if (getState().pool.length > 0){
+      els.resultArea.innerHTML = '<div class="result-placeholder">バックアップを読み込みました。抽選を開始できます。</div>';
+    }
+    // 開いたままの運営画面の入力欄も、読み込んだ内容に合わせる（未保存の編集は破棄される）
+    document.getElementById("cfgTitle").value = config.eventTitle;
+    renderTierRows(config);
+    document.getElementById("configMsg").innerHTML = "";
+    document.getElementById("resetStockMsg").innerHTML = "";
+    var cancelMsgEl = document.getElementById("cancelLastMsg");
+    if (cancelMsgEl) cancelMsgEl.innerHTML = "";
+    renderLastDrawInfo();
+  }
+
+  function handleBackupFile(file){
+    if (file.size > BACKUP_MAX_BYTES){ showBackupMsg("err", "ファイルが大きすぎます。バックアップファイルを選んでください。"); return; }
+    var reader = new FileReader();
+    reader.onerror = function(){ showBackupMsg("err", "ファイルを読み込めませんでした。"); };
+    reader.onload = function(){
+      var b;
+      try{ b = parseBackup(reader.result); }
+      catch(e){ showBackupMsg("err", e.message); return; }
+
+      var when = "";
+      var t = Date.parse(b.exportedAt);
+      if (isFinite(t)) when = "（" + formatDrawTime(t) + " に書き出し）";
+      var cur = getState();
+      askConfirmation(
+        "バックアップ「" + file.name + "」" + when + "を読み込みます。" +
+        " 【バックアップの内容】残り" + b.state.pool.length + "本・抽選履歴" + b.stats.length + "件" +
+        " 【現在の内容】残り" + cur.pool.length + "本・抽選履歴" + readStatsList().length + "件。" +
+        " 現在の設定・在庫・抽選履歴はすべてバックアップの内容に置き換わり、元に戻せません。運営パスワードは変わりません。",
+        function(){
+          if (!applyBackup(b)){
+            showBackupMsg("err", "保存に失敗したため、読み込みを中止しました（現在のデータは変わっていません）。");
+            return;
+          }
+          afterBackupImported();
+          showBackupMsg("ok", "バックアップを読み込みました（残り" + b.state.pool.length + "本・抽選履歴" + b.stats.length + "件）。" +
+            (b.dropped > 0 ? " 壊れていた抽選履歴" + b.dropped + "件は読み込んでいません。" : ""));
+        }
+      );
+    };
+    reader.onloadend = function(){ document.getElementById("importBackupFile").value = ""; };
+    reader.readAsText(file);
+  }
+
+  var exportBackupBtn = document.getElementById("exportBackupBtn");
+  var importBackupBtn = document.getElementById("importBackupBtn");
+  var importBackupFile = document.getElementById("importBackupFile");
+  if (exportBackupBtn && importBackupBtn && importBackupFile){
+    exportBackupBtn.addEventListener("click", exportBackup);
+    importBackupBtn.addEventListener("click", function(){ importBackupFile.click(); });
+    importBackupFile.addEventListener("change", function(){
+      var file = importBackupFile.files && importBackupFile.files[0];
+      if (file) handleBackupFile(file);
+    });
+  }
 
   /* ===================== 他スクリプトへの公開API ===================== */
   // reveal-scratch.js / reveal-gacha.js は、このオブジェクトの

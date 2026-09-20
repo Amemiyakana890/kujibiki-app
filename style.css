@@ -211,9 +211,11 @@
   .stock-title span.remain strong{ color:var(--ink); font-size:18px; }
   .stock-list{ display:flex; flex-direction:column; gap:16px; }
   .stock-item{
-    transition:opacity .5s ease, transform .5s ease, max-height .5s ease;
+    transition:opacity .5s ease, transform .5s ease, max-height .5s ease, margin-top .5s ease;
   }
-  .stock-item.leaving{ opacity:0; transform:scale(.94); max-height:0; overflow:hidden; margin:0; }
+  /* 消えていく行。max-height は JS（fadeOutStockItem）が今の高さ→0へ動かす。
+     margin-top:-16px は、.stock-list の gap（16px）の分を打ち消し、消え終わった瞬間に下の行がカクッと詰まるのを防ぐ */
+  .stock-item.leaving{ opacity:0; transform:scale(.94); overflow:hidden; margin-top:-16px; pointer-events:none; }
   .stock-top{ display:flex; align-items:center; gap:12px; }
   .stock-item .chip{ width:42px; height:42px; border-radius:13px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:13px; flex-shrink:0; }
   .stock-item .info{ flex:1; min-width:0; }

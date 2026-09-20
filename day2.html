@@ -133,6 +133,17 @@
 
     <div class="section-div"></div>
 
+    <label>バックアップ（書き出し・読み込み）</label>
+    <p class="hint">賞品の設定・在庫・抽選履歴を1つのファイルに書き出します。ブラウザのデータが消えたときや、別のPC・別のURLへデータを移すときに、読み込んで元に戻せます。保存済みの内容が対象で、編集中で未保存の内容は含まれません。運営パスワードはファイルに含まれません。</p>
+    <div class="modal-actions">
+      <button class="btn-ghost btn-small" id="exportBackupBtn">バックアップを書き出す</button>
+      <button class="btn-ghost btn-small" id="importBackupBtn">バックアップを読み込む</button>
+      <input type="file" id="importBackupFile" accept=".json,application/json" hidden>
+    </div>
+    <div id="backupMsg"></div>
+
+    <div class="section-div"></div>
+
     <label>運営パスワードの変更</label>
     <input type="password" id="newPassword" placeholder="新しいパスワード" autocomplete="new-password">
     <p class="password-warning">注意：パスワードを変更すると、次回から新しいパスワードが必要です。変更内容を確認してから実行してください。</p>
