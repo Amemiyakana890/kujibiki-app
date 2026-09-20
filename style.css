@@ -29,6 +29,23 @@
     padding:0 1rem 3.75rem;
     overflow-x:hidden;
   }
+  /* 日ごとの背景画像。<body class="bg-day1"> のように指定する（クラスが無いページは、上の既定のグラデーションのまま）。
+     画像を差し替えるときは、images/ の中のファイルを入れ替えるか、この url() のファイル名を変える。
+     画像が読み込めなかったときのために、既定のグラデーションを下の層に重ねてある。 */
+  body.bg-day1{
+    background:
+      url("images/bg-day1.jpg") center / cover no-repeat fixed,
+      linear-gradient(180deg,#F4F6FC,#E9EDF7) fixed;
+  }
+  body.bg-day2{
+    background:
+      url("images/bg-day2.jpg") center / cover no-repeat fixed,
+      linear-gradient(180deg,#F4F6FC,#E9EDF7) fixed;
+  }
+  /* 背景画像のページでは、背景に直接載る「案内ページへ」のリンクが、絵の線と重なって読みにくくならないよう、半透明の白いラベルを敷く */
+  body[class*="bg-day"] .page-switch-hint a{
+    display:inline-block; padding:0.3125rem 0.875rem; border-radius:62.4375rem; background:rgba(255,255,255,.82);
+  }
   .stage{ position:relative; z-index:1; max-width:67.5rem; margin:0 auto; }
   html:fullscreen body{
     min-height:100%; display:flex; align-items:center; justify-content:center; padding:1.5rem;
