@@ -114,6 +114,16 @@
 
     <div class="section-div"></div>
 
+    <label>直前の抽選の取り消し</label>
+    <p class="hint">押し間違えたときなどに、直前の1回分を取り消します。当たった景品は在庫に戻り、集計の記録も1件削除されます。取り消せるのは直前の1回だけで、在庫をリセットすると取り消せなくなります。</p>
+    <div class="last-draw" id="lastDrawInfo"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost btn-small" id="cancelLastBtn">直前の抽選を取り消す</button>
+    </div>
+    <div id="cancelLastMsg"></div>
+
+    <div class="section-div"></div>
+
     <label>在庫リセット</label>
     <p class="hint">現在このページは <strong id="adminDayLabel">2日目</strong>（ガチャ演出）です。ボタンを押すと在庫が満タンに戻ります。day1.html と在庫を共有しているので、通常は1日目終了時に day1.html 側でリセットしておけばOKです。</p>
     <div class="modal-actions">

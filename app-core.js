@@ -92,18 +92,44 @@
     return null;
   }
 
+  function readStatsList(){
+    try{
+      var parsed = JSON.parse(localStorage.getItem(STATS_KEY) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    }catch(e){ return []; }
+  }
+
   // 抽選1回ぶんの履歴を追記する。日付・時刻・時間帯は ts から集計側で算出する。
   // 記録に失敗しても抽選そのものは止めない。
   function recordDraw(prize, ts){
     try{
-      var list = [];
-      try{
-        var parsed = JSON.parse(localStorage.getItem(STATS_KEY) || "[]");
-        if (Array.isArray(parsed)) list = parsed;
-      }catch(e){ list = []; }
+      var list = readStatsList();
       list.push({ ts: ts, day: CURRENT_DAY, id: prize.id, label: prize.label });
       localStorage.setItem(STATS_KEY, JSON.stringify(list));
     }catch(e){ /* 保存できなくても抽選は続行 */ }
+  }
+
+  // 抽選の取り消し用。抽選時刻（ts）と賞IDが一致する履歴を1件だけ削除する。
+  function removeStatsRecord(ts, id){
+    try{
+      var list = readStatsList();
+      for (var i = list.length - 1; i >= 0; i--){
+        if (list[i] && list[i].ts === ts && list[i].id === id){
+          list.splice(i, 1);
+          localStorage.setItem(STATS_KEY, JSON.stringify(list));
+          return true;
+        }
+      }
+    }catch(e){}
+    return false;
+  }
+
+  function pad2(n){ return (n < 10 ? "0" : "") + n; }
+  // 「9月20日 10:27:03」形式
+  function formatDrawTime(ts){
+    var d = new Date(ts);
+    return (d.getMonth() + 1) + "月" + d.getDate() + "日 " +
+           pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
   }
 
   /* ===================== サウンド ===================== */
@@ -241,6 +267,7 @@
   var isDrawing = false;
   var revealActive = false;
   var pendingPrize = null;
+  var pendingDrawTs = null;
 
   function drawOnce(){
     if (isDrawing || revealActive) return;
@@ -258,10 +285,14 @@
     var drawnAt = Date.now();
     state.pool.splice(idx, 1);
     state.drawnLog.push({ id: winId, ts: drawnAt });
+    // 「直前の抽選」。在庫と同じ書き込みで保存するので、在庫が減ったのに結果が残らない、ということが起きない。
+    // revealed は「演出が最後まで終わって結果が表示されたか」。false のまま画面が閉じられたら、次回の起動時に結果を復元する。
+    state.lastDraw = { ts: drawnAt, day: CURRENT_DAY, id: winId, label: prize.label, name: prize.name || "", revealed: false };
     setState(state);
     recordDraw(prize, drawnAt);
 
     pendingPrize = prize;
+    pendingDrawTs = drawnAt;
     renderResultContent(prize);
 
     revealActive = true;
@@ -306,6 +337,10 @@
     celebrate(prize || pendingPrize);
     var state = getState();
     var config = getConfig();
+    if (state.lastDraw && state.lastDraw.ts === pendingDrawTs && !state.lastDraw.revealed){
+      state.lastDraw.revealed = true;
+      setState(state);
+    }
     renderHeader(config, state);
     renderStock(config, state);
     els.drawBtn.disabled = state.pool.length === 0;
@@ -316,6 +351,7 @@
     var state = getState();
     state.pool = buildPool(config);
     state.drawnLog = [];
+    state.lastDraw = null; // 満タンに戻した後に取り消すと総数を超えてしまうため
     setState(state);
     revealActive = false;
     if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
@@ -323,6 +359,52 @@
     renderAll();
     els.resultArea.innerHTML = '<div class="result-placeholder">在庫をリセットしました。抽選を開始できます。</div>';
     confettiBurst(50, 0.6);
+  }
+
+  // 直前の1回を取り消す。景品を在庫へ戻し、集計の記録も1件削除する。
+  // 戻り値: { ok, restored, draw } / 失敗時 { ok:false, reason }
+  function cancelLastDraw(){
+    var config = getConfig();
+    var state = getState();
+    var last = state.lastDraw;
+    if (!last) return { ok:false, reason:"none" };
+    var prize = prizeById(config, last.id);
+    if (!prize) return { ok:false, reason:"removed" };
+
+    // すでに総数まで在庫がある（手で在庫を直した後など）場合は、在庫を総数より増やさない
+    var restored = false;
+    if ((remainingCounts(state, config)[last.id] || 0) < prize.total){
+      var insertAt = Math.floor(Math.random() * (state.pool.length + 1));
+      state.pool.splice(insertAt, 0, last.id);
+      restored = true;
+    }
+    state.drawnLog = (state.drawnLog || []).filter(function(e){ return e.ts !== last.ts; });
+    state.lastDraw = null;
+    setState(state);
+    removeStatsRecord(last.ts, last.id);
+
+    // 演出の最中なら止める（取り消した賞のお祝いが後から出ないように）
+    revealActive = false;
+    if (typeof Kuji.hideRevealOverlay === "function") Kuji.hideRevealOverlay();
+    if (els.scratchWrap) els.scratchWrap.classList.remove("has-card");
+    renderAll();
+    els.resultArea.innerHTML = '<div class="result-placeholder">直前の抽選を取り消しました。もう一度抽選できます。</div>';
+    return { ok:true, restored:restored, draw:last };
+  }
+
+  // 演出の途中で画面が閉じられた（再読み込み・強制終了など）抽選の結果を、画面に表示する。
+  // 在庫はすでに減っているので、結果を見せないままにしない。表示したら「表示済み」にして、繰り返し出さない。
+  function restoreInterruptedDraw(){
+    var state = getState();
+    var last = state.lastDraw;
+    if (!last || last.revealed) return;
+    renderResultContent({ id: last.id, label: last.label, name: last.name });
+    var d = new Date(last.ts);
+    els.resultArea.insertAdjacentHTML("beforeend",
+      '<div class="result-notice">演出の途中で画面が閉じられたため、結果を表示しています（' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' の抽選）</div>');
+    last.revealed = true;
+    setState(state);
   }
 
   /* ===================== イベント：メイン画面 ===================== */
@@ -416,7 +498,56 @@
     renderTierRows(config);
     document.getElementById("configMsg").innerHTML = "";
     document.getElementById("passwordMsg").innerHTML = "";
+    var cancelMsgEl = document.getElementById("cancelLastMsg");
+    if (cancelMsgEl) cancelMsgEl.innerHTML = "";
+    renderLastDrawInfo();
     adminBackdrop.classList.add("show");
+  }
+
+  // 運営画面の「直前の抽選」欄。取り消せる抽選がなければボタンを無効にする。
+  function renderLastDrawInfo(){
+    var info = document.getElementById("lastDrawInfo");
+    var btn = document.getElementById("cancelLastBtn");
+    if (!info || !btn) return;
+    var last = getState().lastDraw;
+    if (!last){
+      info.innerHTML = '<div class="last-draw-empty">取り消せる抽選はありません。</div>';
+      btn.disabled = true;
+      return;
+    }
+    var html = '<div class="last-draw-prize"><strong>' + escapeHtml(last.label) + '</strong>　' + escapeHtml(last.name || "") + '</div>' +
+               '<div class="last-draw-meta">' + last.day + '日目　' + formatDrawTime(last.ts) + '</div>';
+    if (!last.revealed) html += '<div class="last-draw-note">演出の途中で終了した抽選です（結果はこの画面で確認できます）。</div>';
+    var removed = !prizeById(getConfig(), last.id);
+    if (removed) html += '<div class="last-draw-note">この賞は設定から削除されているため、取り消せません。</div>';
+    info.innerHTML = html;
+    btn.disabled = removed;
+  }
+
+  var cancelLastBtn = document.getElementById("cancelLastBtn");
+  if (cancelLastBtn){
+    cancelLastBtn.addEventListener("click", function(){
+      var last = getState().lastDraw;
+      if (!last) return;
+      askConfirmation(
+        "「" + last.label + "：" + (last.name || "") + "」の抽選（" + formatDrawTime(last.ts) + "）を取り消しますか？ 景品は在庫に戻り、集計の記録も1件削除されます。",
+        function(){
+          var res = cancelLastDraw();
+          var msgEl = document.getElementById("cancelLastMsg");
+          if (res.ok){
+            syncStockInputsFromState();
+            renderLastDrawInfo();
+            msgEl.innerHTML = '<div class="msg ok">' + escapeHtml(res.draw.label) + 'の抽選を取り消しました。' +
+              (res.restored ? '景品を在庫に戻し、集計の記録も削除しました。'
+                            : '在庫はすでに総数に達しているため、在庫の数は変えていません。集計の記録は削除しました。') + '</div>';
+          } else {
+            renderLastDrawInfo();
+            msgEl.innerHTML = '<div class="msg err">取り消せませんでした。' +
+              (res.reason === "removed" ? 'この賞は設定から削除されています。' : '取り消せる抽選がありません。') + '</div>';
+          }
+        }
+      );
+    });
   }
 
   // 運営画面の「現在庫」欄を、実際の在庫（localStorage）の数に合わせ直す。
@@ -438,6 +569,7 @@
       askConfirmation("在庫を満タンにリセットします。よろしいですか？", function(){
         resetStock();
         syncStockInputsFromState();
+        renderLastDrawInfo();
         document.getElementById("resetStockMsg").innerHTML = '<div class="msg ok">在庫をリセットしました。</div>';
       });
     });
@@ -642,4 +774,5 @@
 
   /* ===================== 初期化 ===================== */
   renderAll();
+  restoreInterruptedDraw();
 })();
