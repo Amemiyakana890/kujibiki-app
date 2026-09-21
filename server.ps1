@@ -1,5 +1,6 @@
 ﻿$port = 8080
-$root = $PSScriptRoot
+$root = [System.IO.Path]::GetFullPath($PSScriptRoot)
+$rootPrefix = $root.TrimEnd('\') + '\'
 $url  = "http://localhost:$port/index.html"
 
 # ブラウザで案内ページを開く。
@@ -40,9 +41,25 @@ while ($listener.IsListening) {
     $request  = $context.Request
     $response = $context.Response
 
-    $path = $request.Url.LocalPath.TrimStart('/')
+    $path = $request.Url.LocalPath.TrimStart('/').Replace('/', '\')
     if ([string]::IsNullOrEmpty($path)) { $path = "index.html" }
-    $filePath = Join-Path $root $path
+    try {
+        $filePath = [System.IO.Path]::GetFullPath((Join-Path $root $path))
+    } catch {
+        $response.StatusCode = 400
+        $msg = [System.Text.Encoding]::UTF8.GetBytes("400 Bad Request")
+        $response.OutputStream.Write($msg, 0, $msg.Length)
+        $response.OutputStream.Close()
+        continue
+    }
+
+    if (-not $filePath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        $response.StatusCode = 403
+        $msg = [System.Text.Encoding]::UTF8.GetBytes("403 Forbidden")
+        $response.OutputStream.Write($msg, 0, $msg.Length)
+        $response.OutputStream.Close()
+        continue
+    }
 
     if (Test-Path $filePath -PathType Leaf) {
         $bytes = [System.IO.File]::ReadAllBytes($filePath)
