@@ -12,7 +12,7 @@
   var CONFIG_KEY = "kujiConfig_v1";
   var STATE_KEY  = "kujiState_v1";
   var MUTE_KEY   = "kujiMuted_v1";
-  // 抽選履歴（集計ページ用）。在庫リセット・全データ初期化の影響を受けないよう、
+  // 抽選履歴（集計ページ用）。在庫リセット・設定と在庫の初期化の影響を受けないよう、
   // 在庫（STATE_KEY）とは別のキーに保存する。集計・CSV出力・リセットは statistics.js が担当。
   var STATS_KEY  = "kujiStats_v1";
 
